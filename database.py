@@ -34,10 +34,7 @@ def create_schema():
                             id            int generated as identity primary key,
                             name          varchar2(30) not null,
                             age           int not null,
-                            income        int not null,
-                            is_single     int not null check (is_single in (0,1)),
-                            no_children   int not null,
-                            no_cars       int not null)"""
+                            income        int not null)"""
         
         sql = [drop_table, create_table]
         
@@ -45,27 +42,26 @@ def create_schema():
             try:
                 cursor.execute(s)                
             except oracledb.DatabaseError as e:
-                raise        
-        print("Table customer created.")
+                raise                
         insert_data()
 
 # insert sample data            
 def insert_data():    
     data_to_insert = [
-        ("John",    28, 6500, 1, 0, 1),
-        ("Jessica", 22, 7000, 0, 3, 2),
-        ("David",   31, 3900, 1, 1, 1),        
-        ("Matthew", 38, 5200, 0, 2, 2),
-        ("Brandon", 35, 4700, 0, 2, 2),
-        ("Joshua",  25, 2600, 1, 0, 0),
-        ("Amanda",  33, 6500, 0, 2, 1),        
-        ("Lauren",  39, 5500, 0, 3, 2),
-        ("James",   26, 3200, 1, 0, 0),
-        ("Olivia",  44, 8200, 0, 2, 3) 
+        ("John",    28, 6500),
+        ("Jessica", 22, 7000),
+        ("David",   31, 3900),        
+        ("Matthew", 38, 5200),
+        ("Brandon", 35, 4700),
+        ("Joshua",  25, 2600),
+        ("Amanda",  33, 6500),        
+        ("Lauren",  39, 5500),
+        ("James",   26, 3200),
+        ("Olivia",  44, 8200) 
     ]
     
     cursor = connection.cursor()
-    sql = "INSERT INTO customer (name, age, income, is_single, no_children, no_cars) VALUES (:1, :2, :3, :4, :5, :6)"
+    sql = "INSERT INTO customer (name, age, income) VALUES (:1, :2, :3)"
     cursor.executemany(sql, data_to_insert)
     connection.commit()    
    
@@ -101,13 +97,13 @@ def vectorize_data(column_list):
 # get list of customers        
 def get_customers():
     with connection.cursor() as cursor:
-        sql = "select id, name, age, income, no_children, is_single, no_children, no_cars from customer"
+        sql = "select id, name, age, income from customer"
         cursor.execute(sql)   
         rs = cursor.fetchall()
         
         colunas = [col[0] for col in cursor.description]
         df = pd.DataFrame(rs, columns=colunas)
-        print(df)        
+        print(df.to_string(index=False))        
 
 # get customer vectorized profiles 
 def get_customer_profiles():
