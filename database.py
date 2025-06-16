@@ -7,6 +7,19 @@ import os
 import array
 from dotenv import load_dotenv
 
+os.environ["USER_AGENT"] = "RAG-demo"
+
+from langchain_community.document_loaders import WebBaseLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from langchain_openai import OpenAI
+from langchain_core.prompts import PromptTemplate
+
+from langchain_community.vectorstores.oraclevs import OracleVS
+from langchain_community.vectorstores.utils import DistanceStrategy
+from langchain_huggingface import HuggingFaceEmbeddings
+
+
 columns_list    = "" # list of customer columns
 customer_name   = "" # get similar customers to this name
 distance_metric = "" # distance metric
@@ -45,19 +58,68 @@ def create_schema():
                 raise                
         insert_data()
 
+# add job columns
+def add_job():
+    with connection.cursor() as cursor:   
+        drop_table = "drop table if exists customer"
+        
+        create_table = """create table customer (
+                            id            int generated as identity primary key,
+                            name          varchar2(30) not null,
+                            age           int not null,
+                            income        int not null,
+                            job           varchar2(30) not null,
+                            job_vector    vector)"""
+        
+        sql = [drop_table, create_table]
+               
+        for s in sql:
+            try:
+                cursor.execute(s)                
+            except oracledb.DatabaseError as e:
+                raise 
+             
+        data_to_insert = [
+            ("John",    28, 6700, "Engineer"),
+            ("Jessica", 22, 7000, "Teacher"),
+            ("David",   31, 3900, "Nurse"),        
+            ("Matthew", 38, 5200, "Lawyer"),
+            ("Brandon", 35, 4700, "Architect"),
+            ("Joshua",  25, 2600, "Accountant"),
+            ("Amanda",  25, 6500, "Chef"),        
+            ("Lauren",  39, 5500, "Journalist"),
+            ("James",   26, 3200, "Dentist"),
+            ("Olivia",  36, 5500, "Firefighter") 
+        ]
+    
+        cursor = connection.cursor()
+        sql = "INSERT INTO customer (name, age, income, job) VALUES (:1, :2, :3, :4)"
+        cursor.executemany(sql, data_to_insert)
+        connection.commit()    
+        
+        sql = "select id, name, age, income, job from customer"
+        cursor.execute(sql)   
+        rs = cursor.fetchall()
+        
+        colunas = [col[0] for col in cursor.description]
+        df = pd.DataFrame(rs, columns=colunas)
+        print(df.to_string(index=False))        
+
+
+
 # insert sample data            
 def insert_data():    
     data_to_insert = [
-        ("John",    28, 6500),
+        ("John",    28, 6700),
         ("Jessica", 22, 7000),
         ("David",   31, 3900),        
         ("Matthew", 38, 5200),
         ("Brandon", 35, 4700),
         ("Joshua",  25, 2600),
-        ("Amanda",  33, 6500),        
+        ("Amanda",  25, 6500),        
         ("Lauren",  39, 5500),
         ("James",   26, 3200),
-        ("Olivia",  44, 8200) 
+        ("Olivia",  36, 5500) 
     ]
     
     cursor = connection.cursor()
@@ -120,7 +182,10 @@ def get_similiar_customer_profiles(column_list, name, k=3, distance="euclidean")
         cursor.execute(sql, [name])   
         embedding_profile = cursor.fetchone()
         
-        sql = "select name, profile from customer order by vector_distance(profile, :1, distance_metric) fetch first :2 rows only"
+        sql = """select name, profile 
+                 from customer 
+                 order by vector_distance(profile, :1, distance_metric) fetch first :2 rows only"""
+                 
         sql = sql.replace("distance_metric", distance)
                 
         cursor.execute(sql, [embedding_profile[0], k])   
@@ -146,7 +211,7 @@ def set_customer(name):
     global customer_name
     customer_name = name.title()
     
-    if customer_name.title() not in ["Jessica", "David", "Matthew", "Brandon","Joshua", "Amanda", "Lauren", "James", "Olivia"]:
+    if customer_name.title() not in ["Jessica", "David", "John", "Matthew", "Brandon","Joshua", "Amanda", "Lauren", "James", "Olivia"]:
         raise Exception("Customer name must be one of Jessica, David, Matthew, Brandon, Joshua, Amanda, Lauren, James, Olivia")
 
 # set similarity distance metric    
@@ -203,7 +268,8 @@ def similarity_chart(columns, cust_name, distance="euclidean"):
     create_schema()    
     vectorize_data(columns_list)
     
-    similiar_profiles = {s[0] for s in get_similiar_customer_profiles(columns_list, customer_name, 3, distance_metric)}    
+    similiar_profiles = {s[0] for s in get_similiar_customer_profiles(columns_list, customer_name, 3, distance_metric)}
+    
     all_profiles = get_customer_profiles()    
     
     cols = columns_list.split(",")
